@@ -3,19 +3,130 @@ import sqlite3
 import psycopg
 from psycopg import ClientCursor, connection as _connection
 from psycopg.rows import dict_row
+from dataclasses import asdict
+from typing import Generator, List
+
+from models import (
+    FilmWork,
+    Genre,
+    GenreFilmWork,
+    PersonFilmWork,
+    Person
+    )
+
+BATCH_SIZE = 100
+
+DATA_CLASSES = [FilmWork, Genre, GenreFilmWork, Person, PersonFilmWork]
 
 
-def load_from_sqlite(connection: sqlite3.Connection, pg_conn: _connection):
+def extract_data(sqlite_cursor: sqlite3.Cursor, table: str) -> Generator[List[sqlite3.Row], None, None]:
+    sqlite_cursor.execute(f'SELECT * FROM {table}')
+    while results := sqlite_cursor.fetchmany(BATCH_SIZE):
+        yield results
+
+
+def transform_data(sqlite_cursor: sqlite3.Cursor):
+
+    for data_class in DATA_CLASSES:
+        table_name = data_class.__table_name__
+        for batch in extract_data(sqlite_cursor, table_name):
+            yield [data_class(**{column: row[column] for column in row.keys()}) for row in batch]
+
+
+def load_data(sqlite_cursor: sqlite3.Cursor, pg_cursor: psycopg.Cursor):
+    for batch in transform_data(sqlite_cursor):
+        for dto_instance in batch:
+
+            table_name = dto_instance.__table_name__
+            fields = dto_instance.__dataclass_fields__.keys()
+            values = asdict(dto_instance)
+
+            placeholders = ', '.join(['%s'] * len(fields))
+            columns = ', '.join(fields)
+
+            query = f'INSERT INTO {table_name} ({columns}) VALUES ({placeholders}) ON CONFLICT (id) DO NOTHING'
+            pg_cursor.execute(query, [values[field] for field in fields])
+
+
+def load_from_sqlite(sqlite_conn: sqlite3.Connection, pg_conn: _connection):
     """Основной метод загрузки данных из SQLite в Postgres"""
-    # postgres_saver = PostgresSaver(pg_conn)
-    # sqlite_loader = SQLiteLoader(connection)
-
-    # data = sqlite_loader.load_movies()
-    # postgres_saver.save_all_data(data)
+    with pg_conn.cursor() as pg_cursor:
+        load_data(sqlite_conn, pg_cursor)
 
 
 if __name__ == '__main__':
     dsl = {'dbname': 'movies_database', 'user': 'app', 'password': '123qwe', 'host': '127.0.0.1', 'port': 5432}
+    with sqlite3.connect('db.sqlite') as sqlite_conn, psycopg.connect(
+        **dsl, row_factory=dict_row, cursor_factory=ClientCursor
+    ) as pg_conn:
+        load_from_sqlite(sqlite_conn, pg_conn)
+
+    print('🎉 Данные успешно перенесены !!!') 
+
+
+
+# def test_transfer(sqlite_cursor: sqlite3.Cursor, pg_cursor: psycopg.Cursor):
+#     sqlite_cursor.execute('SELECT * FROM students')
+
+#     while batch := sqlite_cursor.fetchmany(BATCH_SIZE):
+#         original_students_batch = [Student(**dict(student)) for student in batch]
+#         ids = [student.id for student in original_students_batch]
+
+#         pg_cursor.execute('SELECT * FROM students WHERE id = ANY(%s)', [ids])
+#         transferred_students_batch = [Student(**student) for student in pg_cursor.fetchall()]
+
+#         assert len(original_students_batch) == len(transferred_students_batch)
+#         assert original_students_batch == transferred_students_batch
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+def load_from_sqlite(connection: sqlite3.Connection, pg_conn: _connection):
+    """Основной метод загрузки данных из SQLite в Postgres"""
+    postgres_saver = PostgresSaver(pg_conn)
+    sqlite_loader = SQLiteLoader(connection)
+
+    data = sqlite_loader.load_movies()
+    postgres_saver.save_all_data(data)
+
+
+
+
+
+
+if __name__ == '__main__':
+    dsl = {'dbname': 'server_collection', 'user': 'postgres', 'password': 'postgres', 'host': '127.0.0.1', 'port': 5432}
     with sqlite3.connect('db.sqlite') as sqlite_conn, psycopg.connect(
         **dsl, row_factory=dict_row, cursor_factory=ClientCursor
     ) as pg_conn:

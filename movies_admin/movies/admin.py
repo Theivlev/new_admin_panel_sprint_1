@@ -23,6 +23,7 @@ class FilmworkAdmin(admin.ModelAdmin):
 
 
 class PersonFilmworkInline(admin.TabularInline):
+    autocomplete_fields = ['person', 'film_work']
     model = PersonFilmwork
 
 
