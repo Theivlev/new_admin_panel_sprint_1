@@ -1,7 +1,6 @@
 import sqlite3
 import psycopg
-from psycopg import ClientCursor, connection as _connection
-from psycopg.rows import dict_row
+from psycopg import connection as _connection
 from dataclasses import asdict
 from typing import Generator, List
 from utils import sqlite_cursor_context
@@ -52,18 +51,6 @@ def load_from_sqlite(sqlite_conn: sqlite3.Connection, pg_conn: _connection):
     with sqlite_cursor_context(sqlite_conn) as sqlite_cursor:
         with pg_conn.cursor() as pg_cursor:
             load_data(sqlite_cursor, pg_cursor)
-
-
-# if __name__ == '__main__':
-#     dsl = {'dbname': 'project_collection', 'user': 'theivlev', 'password': 'qwerty1234', 'host': 'localhost', 'port': 5433}
-#     with sqlite3.connect(db_path) as sqlite_conn, psycopg.connect(
-#         **dsl, row_factory=dict_row, cursor_factory=ClientCursor
-#     ) as pg_conn:
-#         load_from_sqlite(sqlite_conn, pg_conn)
-
-#     print('🎉 Данные успешно перенесены !!!')
-
-
 
 
 # def test_transfer(sqlite_cursor: sqlite3.Cursor, pg_cursor: psycopg.Cursor):

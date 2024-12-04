@@ -1,12 +1,12 @@
 version: '3.9'
 
 services:
- 
+
   db_project:
     image: postgres:16
     container_name: db_postgres_project
     ports:
-      - "5433:5432"
+      - "5432:5432"
     environment:
       - POSTGRES_PASSWORD=qwerty1234
       - POSTGRES_USER=theivlev
@@ -14,7 +14,23 @@ services:
     restart: always
     volumes:
       - postgres:/var/lib/postgresql/data
+      - ../schema_design:/docker-entrypoint-initdb.d
+
+  movies_admin:
+    build:
+      context: ./movies_admin
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db_project
+    restart: always
+
+  sqlite_to_postgres:
+    build:
+      context: ./sqlite_to_postgres
+    depends_on:
+      - movies_admin
+    restart: no
 
 volumes:
   postgres:
-
