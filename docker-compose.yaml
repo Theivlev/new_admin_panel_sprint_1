@@ -14,7 +14,7 @@ services:
     restart: always
     volumes:
       - postgres:/var/lib/postgresql/data
-      - ../schema_design:/docker-entrypoint-initdb.d
+      - ./sqlite_to_postgres/database:/docker-entrypoint-initdb.d
 
   movies_admin:
     build:
@@ -29,6 +29,7 @@ services:
     build:
       context: ./sqlite_to_postgres
     depends_on:
+      - db_project
       - movies_admin
     restart: no
 
