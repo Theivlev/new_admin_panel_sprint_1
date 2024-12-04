@@ -8,8 +8,8 @@ services:
     ports:
       - "5432:5432"
     environment:
-      - POSTGRES_PASSWORD=qwerty1234
-      - POSTGRES_USER=theivlev
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_USER=postgres
       - POSTGRES_DB=project_collection
     restart: always
     volumes:
