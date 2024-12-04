@@ -14,5 +14,5 @@ class IDMixin:
 
 @dataclass
 class TimestampMixin:
-    created: datetime
-    modified: datetime
+    created_at: datetime
+    updated_at: datetime
