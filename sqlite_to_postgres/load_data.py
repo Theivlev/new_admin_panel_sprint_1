@@ -1,16 +1,29 @@
+import logging
 import sqlite3
-import psycopg
-from psycopg import connection as _connection
 from dataclasses import asdict
 from typing import Generator, List
-from utils import sqlite_cursor_context
+
+import psycopg
+from psycopg import connection as _connection
+
 from models import (
     FilmWork,
     Genre,
     GenreFilmWork,
     PersonFilmWork,
     Person
-    )
+)
+
+from utils import sqlite_cursor_context
+
+
+logging.basicConfig(
+    level=logging.INFO, 
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
+
+logger = logging.getLogger(__name__)
+
 
 BATCH_SIZE = 100
 
@@ -18,17 +31,27 @@ DATA_CLASSES = [FilmWork, Genre, GenreFilmWork, Person, PersonFilmWork]
 
 
 def extract_data(sqlite_cursor: sqlite3.Cursor, table: str) -> Generator[List[sqlite3.Row], None, None]:
-    sqlite_cursor.execute(f'SELECT * FROM {table}')
-    while results := sqlite_cursor.fetchmany(BATCH_SIZE):
-        yield results
+    logger.info(f"Начало извлечения данных из таблицы {table}.")
+    try:
+        sqlite_cursor.execute(f'SELECT * FROM {table}')
+        while results := sqlite_cursor.fetchmany(BATCH_SIZE):
+            logger.info(f"Извлечено {len(results)} записей из таблицы {table}.")
+            yield results
+    except sqlite3.Error as error:
+        logger.error(f"Ошибка при извлечении данных из таблицы {table} : {error}")
 
 
 def transform_data(sqlite_cursor: sqlite3.Cursor):
 
     for data_class in DATA_CLASSES:
         table_name = data_class.__table_name__
-        for batch in extract_data(sqlite_cursor, table_name):
-            yield [data_class(**{column: row[column] for column in row.keys()}) for row in batch]
+        logger.info(f"Начало трансформации данных из таблицы {table_name}.")
+        try:
+            for batch in extract_data(sqlite_cursor, table_name):
+                logger.info(f"Преобразование данных из таблицы {table_name}.")
+                yield [data_class(**{column: row[column] for column in row.keys()}) for row in batch]
+        except Exception as error:
+            logger.error(f'Ошибка преобразования данных из таблицы {table_name}: {error}')
 
 
 def load_data(sqlite_cursor: sqlite3.Cursor, pg_cursor: psycopg.Cursor):
@@ -41,27 +64,33 @@ def load_data(sqlite_cursor: sqlite3.Cursor, pg_cursor: psycopg.Cursor):
 
             placeholders = ', '.join(['%s'] * len(fields))
             columns = ', '.join(fields)
-
             query = f'INSERT INTO content.{table_name} ({columns}) VALUES ({placeholders}) ON CONFLICT (id) DO NOTHING'
-            pg_cursor.execute(query, [values[field] for field in fields])
+            try:
+                pg_cursor.execute(query, [values[field] for field in fields])
+                logger.info(f"Успешно вставлена запись в таблицу {table_name}. ID: {values['id']}")
+            except psycopg.Error as error:
+                logger.error(f'Ошибка вставки данных в таблицу {table_name}: {error}')
 
 
 def load_from_sqlite(sqlite_conn: sqlite3.Connection, pg_conn: _connection):
     """Основной метод загрузки данных из SQLite в Postgres"""
     with sqlite_cursor_context(sqlite_conn) as sqlite_cursor:
         with pg_conn.cursor() as pg_cursor:
-            load_data(sqlite_cursor, pg_cursor)
+            try:
+                load_data(sqlite_cursor, pg_cursor)
+            except Exception as e:
+                logger.error(f"Ошибка загрузки данных из SQLite в Postgres: {e}")
 
 
-# def test_transfer(sqlite_cursor: sqlite3.Cursor, pg_cursor: psycopg.Cursor):
-#     sqlite_cursor.execute('SELECT * FROM students')
+def test_transfer(sqlite_cursor: sqlite3.Cursor, pg_cursor: psycopg.Cursor):
+    sqlite_cursor.execute('SELECT * FROM students')
 
-#     while batch := sqlite_cursor.fetchmany(BATCH_SIZE):
-#         original_students_batch = [Student(**dict(student)) for student in batch]
-#         ids = [student.id for student in original_students_batch]
+    while batch := sqlite_cursor.fetchmany(BATCH_SIZE):
+        original_batch = [Student(**dict(student)) for student in batch]
+        ids = [student.id for student in original_students_batch]
 
-#         pg_cursor.execute('SELECT * FROM students WHERE id = ANY(%s)', [ids])
-#         transferred_students_batch = [Student(**student) for student in pg_cursor.fetchall()]
+        pg_cursor.execute('SELECT * FROM students WHERE id = ANY(%s)', [ids])
+        transferred_students_batch = [Student(**student) for student in pg_cursor.fetchall()]
 
-#         assert len(original_students_batch) == len(transferred_students_batch)
-#         assert original_students_batch == transferred_students_batch
+        assert len(original_students_batch) == len(transferred_students_batch)
+        assert original_students_batch == transferred_students_batch
