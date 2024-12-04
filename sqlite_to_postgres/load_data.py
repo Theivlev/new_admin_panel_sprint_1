@@ -18,7 +18,7 @@ from utils import sqlite_cursor_context
 
 
 logging.basicConfig(
-    level=logging.INFO, 
+    level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
 
@@ -78,19 +78,5 @@ def load_from_sqlite(sqlite_conn: sqlite3.Connection, pg_conn: _connection):
         with pg_conn.cursor() as pg_cursor:
             try:
                 load_data(sqlite_cursor, pg_cursor)
-            except Exception as e:
-                logger.error(f"Ошибка загрузки данных из SQLite в Postgres: {e}")
-
-
-def test_transfer(sqlite_cursor: sqlite3.Cursor, pg_cursor: psycopg.Cursor):
-    sqlite_cursor.execute('SELECT * FROM students')
-
-    while batch := sqlite_cursor.fetchmany(BATCH_SIZE):
-        original_batch = [Student(**dict(student)) for student in batch]
-        ids = [student.id for student in original_students_batch]
-
-        pg_cursor.execute('SELECT * FROM students WHERE id = ANY(%s)', [ids])
-        transferred_students_batch = [Student(**student) for student in pg_cursor.fetchall()]
-
-        assert len(original_students_batch) == len(transferred_students_batch)
-        assert original_students_batch == transferred_students_batch
+            except Exception as error:
+                logger.error(f"Ошибка загрузки данных из SQLite в Postgres: {error}")
